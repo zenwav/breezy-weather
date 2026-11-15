@@ -38,6 +38,9 @@ jobs:
         run: |
           set -e
           sed -i 's/applicationId = "org.breezyweather"/applicationId = "org.fork.weather"/' app/build.gradle.kts
+          rm -rf app/src/res_fork/drawable* app/src/res_fork/mipmap*
+          cp -r app/src/res_breezy/drawable* app/src/res_breezy/mipmap* app/src/res_fork/
+          sed -i 's/No Name Weather/Weather/' app/src/res_fork/values/strings.xml
           sed -i 's|^app.report_issue=.*|app.report_issue=https://github.com/zenwav/breezy-weather/issues|' gradle.properties
           sed -i 's|^app.source_code_link=.*|app.source_code_link=https://github.com/zenwav/breezy-weather|' gradle.properties
           sed -i 's|^app.releases_link=.*|app.releases_link=https://github.com/zenwav/breezy-weather/releases/latest|' gradle.properties
