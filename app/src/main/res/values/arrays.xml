@@ -277,6 +277,15 @@
         <item>240</item>
     </string-array>
 
+    <string-array name="station_filter_options">
+        <item>@string/settings_weather_source_station_filter_all</item>
+        <item>@string/settings_weather_source_station_filter_community</item>
+    </string-array>
+    <string-array name="station_filter_values">
+        <item>all</item>
+        <item>community</item>
+    </string-array>
+
     <!-- Open-Meteo models -->
     <string-array name="open_meteo_weather_models">
         <item>Best match</item>

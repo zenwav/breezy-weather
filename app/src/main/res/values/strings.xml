@@ -732,6 +732,13 @@
     <string name="settings_weather_source_met_office_api_key" translatable="false">@string/settings_source_api_key</string>
     <string name="settings_weather_source_aemet_api_key" translatable="false">@string/settings_source_api_key</string>
     <string name="settings_weather_source_infoplaza_api_key" translatable="false">@string/settings_source_api_key</string>
+    <string name="settings_weather_source_openaq_api_key" translatable="false">@string/settings_source_api_key</string>
+    <string name="settings_weather_source_iqair_api_key" translatable="false">@string/settings_source_api_key</string>
+    <string name="settings_weather_source_aqiin_api_key">Access token (optional)</string>
+    <string name="settings_weather_source_openaq_station_filter">Station filter</string>
+    <string name="settings_weather_source_aqiin_station_filter">Station filter</string>
+    <string name="settings_weather_source_station_filter_all">All stations (includes IIT / reference)</string>
+    <string name="settings_weather_source_station_filter_community">Community / non-government sensors only</string>
     <!-- Synonym of instance: Server -->
     <string name="settings_source_instance">Instance</string>
     <string name="settings_source_instance_invalid">Must be an https URL ending with a /</string>

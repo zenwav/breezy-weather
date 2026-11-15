@@ -337,6 +337,21 @@ configure<ApplicationExtension> {
             "INFOPLAZA_KEY",
             "\"${localProperties.getProperty("breezy.infoplaza.key") ?: ""}\""
         )
+        it.buildConfigField(
+            "String",
+            "AQI_IN_KEY",
+            "\"${localProperties.getProperty("breezy.aqiin.key") ?: ""}\""
+        )
+        it.buildConfigField(
+            "String",
+            "IQAIR_KEY",
+            "\"${localProperties.getProperty("breezy.iqair.key") ?: ""}\""
+        )
+        it.buildConfigField(
+            "String",
+            "OPENAQ_KEY",
+            "\"${localProperties.getProperty("breezy.openaq.key") ?: ""}\""
+        )
     }
 
     flavorDimensions.add("default")

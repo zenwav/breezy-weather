@@ -46,6 +46,7 @@ import org.breezyweather.sources.accu.AccuService
 import org.breezyweather.sources.aemet.AemetService
 import org.breezyweather.sources.android.AndroidGeocoderService
 import org.breezyweather.sources.android.AndroidLocationService
+import org.breezyweather.sources.aqiin.AqiInService
 import org.breezyweather.sources.atmo.AtmoAuraService
 import org.breezyweather.sources.atmo.AtmoFranceService
 import org.breezyweather.sources.atmo.AtmoGrandEstService
@@ -94,6 +95,7 @@ import org.breezyweather.sources.ims.ImsService
 import org.breezyweather.sources.infoplaza.InfoplazaService
 import org.breezyweather.sources.ipma.IpmaService
 import org.breezyweather.sources.ipsb.IpSbLocationService
+import org.breezyweather.sources.iqair.IqAirService
 import org.breezyweather.sources.jma.JmaService
 import org.breezyweather.sources.knmi.KnmiService
 import org.breezyweather.sources.lhmt.LhmtService
@@ -112,6 +114,7 @@ import org.breezyweather.sources.ncei.NceiService
 import org.breezyweather.sources.nlsc.NlscService
 import org.breezyweather.sources.nominatim.NominatimService
 import org.breezyweather.sources.nws.NwsService
+import org.breezyweather.sources.openaq.OpenAqService
 import org.breezyweather.sources.openmeteo.OpenMeteoService
 import org.breezyweather.sources.openweather.OpenWeatherService
 import org.breezyweather.sources.pagasa.PagasaService
@@ -133,6 +136,7 @@ class SourceManager @Inject constructor(
     anametService: AnametService,
     androidGeocoderService: AndroidGeocoderService,
     androidLocationService: AndroidLocationService,
+    aqiInService: AqiInService,
     atmoAuraService: AtmoAuraService,
     atmoFranceService: AtmoFranceService,
     atmoGrandEstService: AtmoGrandEstService,
@@ -171,6 +175,7 @@ class SourceManager @Inject constructor(
     inmgbService: InmgbService,
     ipmaService: IpmaService,
     ipSbService: IpSbLocationService,
+    iqAirService: IqAirService,
     jmaService: JmaService,
     knmiService: KnmiService,
     lhmtService: LhmtService,
@@ -194,6 +199,7 @@ class SourceManager @Inject constructor(
     nlscService: NlscService,
     nominatimService: NominatimService,
     nwsService: NwsService,
+    openAqService: OpenAqService,
     openMeteoService: OpenMeteoService,
     openWeatherService: OpenWeatherService,
     pagasaService: PagasaService,
@@ -232,10 +238,13 @@ class SourceManager @Inject constructor(
     private val worldwideWeatherSourceList = persistentListOf(
         openMeteoService,
         accuService,
+        aqiInService,
         fpasService,
         infoplazaService,
+        iqAirService,
         metNoService,
         nceiService,
+        openAqService,
         openWeatherService,
         pirateWeatherService,
         wmoSevereWeatherService
