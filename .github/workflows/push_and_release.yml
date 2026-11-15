@@ -1,0 +1,218 @@
+name: Breezy Weather push and release CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: 'ubuntu-26.04'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          java-version-file: .github/.java-version
+          distribution: temurin
+
+      - name: Set up gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+
+      - name: Lint
+        run: ./gradlew spotlessCheck
+
+      - name: Clean build
+        run: ./gradlew clean
+
+      - name: Prepare signing key
+        run: |
+          if [ -n "$INPUT_SIGNING_KEY" ]; then
+            CLEAN_KEY=$(printf '%s' "$INPUT_SIGNING_KEY" | tr -d '\r\n')
+            echo "EFFECTIVE_SIGNING_KEY=$CLEAN_KEY" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_ALIAS=$INPUT_ALIAS" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_KEY_STORE_PASSWORD=$INPUT_KEY_STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_KEY_PASSWORD=$INPUT_KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -v -keystore temp-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias breezy -storepass breezy -keypass breezy -dname "CN=BreezyWeather"
+            echo "EFFECTIVE_SIGNING_KEY=$(base64 -w 0 temp-release.jks)" >> "$GITHUB_ENV"
+            rm -f temp-release.jks
+            echo "EFFECTIVE_ALIAS=breezy" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_KEY_STORE_PASSWORD=breezy" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_KEY_PASSWORD=breezy" >> "$GITHUB_ENV"
+          fi
+        env:
+          INPUT_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          INPUT_ALIAS: ${{ secrets.ALIAS }}
+          INPUT_KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          INPUT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Save version tag in env
+        run: |
+          set -x
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "VERSION_TAG=${GITHUB_REF#refs/tags/}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_TAG=v6.2.3-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          fi
+          echo "APK_UNIVERSAL_FREENET_SHA256=Not built (tag releases only)" >> "$GITHUB_ENV"
+
+      - name: Assemble freenet flavor
+        if: startsWith(github.ref, 'refs/tags/')
+        run: ./gradlew assembleFreenetRelease -Pbreezy # /!\ You’re NOT allowed to redistribute modified APKs with the breezy config enabled, see license terms
+
+      - name: Sign APK (free networks)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: r0adkll/sign-android-release@a391126403df92c6a0a3988a829dd47f79b89ed7
+        with:
+          releaseDirectory: app/build/outputs/apk/freenet/release
+          signingKeyBase64: ${{ env.EFFECTIVE_SIGNING_KEY }}
+          alias: ${{ env.EFFECTIVE_ALIAS }}
+          keyStorePassword: ${{ env.EFFECTIVE_KEY_STORE_PASSWORD }}
+          keyPassword: ${{ env.EFFECTIVE_KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: '36.0.0'
+
+      - name: Prepare APKs with checksums, archive mapping.txt file (freenet)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -e
+          mv app/build/outputs/apk/freenet/release/app-freenet-universal-release-unsigned-signed.apk breezy-weather-${{ env.VERSION_TAG }}_freenet.apk
+          sha256=`sha256sum breezy-weather-${{ env.VERSION_TAG }}_freenet.apk | awk '{ print $1 }'`
+          echo "APK_UNIVERSAL_FREENET_SHA256=$sha256" >> $GITHUB_ENV
+          tar -czvf mapping-${{ env.VERSION_TAG }}_freenet.tar.gz --directory=app/build/outputs/mapping/freenetRelease/ mapping.txt
+
+      - name: Clean build
+        if: startsWith(github.ref, 'refs/tags/')
+        run: ./gradlew clean
+
+      - name: Add secrets to local.properties
+        run: |
+          set -e
+          echo "breezy.accu.key=$ACCU_WEATHER_KEY" >> local.properties
+          echo "breezy.aemet.key=$AEMET_KEY" >> local.properties
+          echo "breezy.atmoaura.key=$ATMO_AURA_KEY" >> local.properties
+          echo "breezy.atmofrance.key=$ATMO_FRANCE_KEY" >> local.properties
+          echo "breezy.atmograndest.key=$ATMO_GRAND_EST_KEY" >> local.properties
+          echo "breezy.atmohdf.key=$ATMO_HDF_KEY" >> local.properties
+          echo "breezy.atmosud.key=$ATMO_SUD_KEY" >> local.properties
+          echo "breezy.baiduip.key=$BAIDU_IP_LOCATION_AK" >> local.properties
+          echo "breezy.bmkg.key=$BMKG_KEY" >> local.properties
+          echo "breezy.cwa.key=$CWA_KEY" >> local.properties
+          echo "breezy.eccc.key=$ECCC_KEY" >> local.properties
+          echo "breezy.geonames.key=$GEO_NAMES_KEY" >> local.properties
+          echo "breezy.metie.key=$MET_IE_KEY" >> local.properties
+          echo "breezy.mf.jwtKey=$MF_WSFT_JWT_KEY" >> local.properties
+          echo "breezy.mf.key=$MF_WSFT_KEY" >> local.properties
+          echo "breezy.openweather.key=$OPEN_WEATHER_KEY" >> local.properties
+          echo "breezy.aqiin.key=$AQI_IN_KEY" >> local.properties
+          echo "breezy.iqair.key=$IQAIR_KEY" >> local.properties
+          echo "breezy.openaq.key=$OPENAQ_KEY" >> local.properties
+        env:
+          ACCU_WEATHER_KEY: ${{ secrets.ACCU_WEATHER_KEY }}
+          AEMET_KEY: ${{ secrets.AEMET_KEY }}
+          ATMO_AURA_KEY: ${{ secrets.ATMO_AURA_KEY }}
+          ATMO_FRANCE_KEY: ${{ secrets.ATMO_FRANCE_KEY }}
+          ATMO_GRAND_EST_KEY: ${{ secrets.ATMO_GRAND_EST_KEY }}
+          ATMO_HDF_KEY: ${{ secrets.ATMO_HDF_KEY }}
+          ATMO_SUD_KEY: ${{ secrets.ATMO_SUD_KEY }}
+          BAIDU_IP_LOCATION_AK: ${{ secrets.BAIDU_IP_LOCATION_AK }}
+          BMKG_KEY: ${{ secrets.BMKG_KEY }}
+          CWA_KEY: ${{ secrets.CWA_KEY }}
+          ECCC_KEY: ${{ secrets.ECCC_KEY }}
+          GEO_NAMES_KEY: ${{ secrets.GEO_NAMES_KEY }}
+          MET_IE_KEY: ${{ secrets.MET_IE_KEY }}
+          MF_WSFT_JWT_KEY: ${{ secrets.MF_WSFT_JWT_KEY }}
+          AQI_IN_KEY: ${{ secrets.AQI_IN_KEY }}
+          IQAIR_KEY: ${{ secrets.IQAIR_KEY }}
+          MF_WSFT_KEY: ${{ secrets.MF_WSFT_KEY }}
+          OPENAQ_KEY: ${{ secrets.OPENAQ_KEY }}
+          OPEN_WEATHER_KEY: ${{ secrets.OPEN_WEATHER_KEY }}
+
+      - name: Assemble basic flavor
+        run: ./gradlew assembleBasicRelease -Pbreezy # /!\ You’re NOT allowed to redistribute modified APKs with the breezy config enabled, see license terms
+
+      - name: Delete local.properties
+        run: |
+          set -e
+          rm -f local.properties
+
+      - name: Sign APK (basic)
+        uses: r0adkll/sign-android-release@a391126403df92c6a0a3988a829dd47f79b89ed7
+        with:
+          releaseDirectory: app/build/outputs/apk/basic/release
+          signingKeyBase64: ${{ env.EFFECTIVE_SIGNING_KEY }}
+          alias: ${{ env.EFFECTIVE_ALIAS }}
+          keyStorePassword: ${{ env.EFFECTIVE_KEY_STORE_PASSWORD }}
+          keyPassword: ${{ env.EFFECTIVE_KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: '36.0.0'
+
+      - name: Upload signed APKs
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: breezy-weather-basic-release-signed
+          path: app/build/outputs/apk/basic/release/*-signed.apk
+
+      - name: Prepare APKs with checksums, archive mapping.txt file (basic)
+        run: |
+          set -e
+          cp app/build/outputs/apk/basic/release/app-basic-universal-release-unsigned-signed.apk breezy-weather-${{ env.VERSION_TAG }}_standard.apk
+          sha256=`sha256sum breezy-weather-${{ env.VERSION_TAG }}_standard.apk | awk '{ print $1 }'`
+          echo "APK_UNIVERSAL_SHA256=$sha256" >> $GITHUB_ENV
+          cp app/build/outputs/apk/basic/release/app-basic-arm64-v8a-release-unsigned-signed.apk breezy-weather-arm64-v8a-${{ env.VERSION_TAG }}_standard.apk
+          sha256=`sha256sum breezy-weather-arm64-v8a-${{ env.VERSION_TAG }}_standard.apk | awk '{ print $1 }'`
+          echo "APK_ARM64_V8A_SHA256=$sha256" >> $GITHUB_ENV
+          cp app/build/outputs/apk/basic/release/app-basic-armeabi-v7a-release-unsigned-signed.apk breezy-weather-armeabi-v7a-${{ env.VERSION_TAG }}_standard.apk
+          sha256=`sha256sum breezy-weather-armeabi-v7a-${{ env.VERSION_TAG }}_standard.apk | awk '{ print $1 }'`
+          echo "APK_ARMEABI_V7A_SHA256=$sha256" >> $GITHUB_ENV
+          cp app/build/outputs/apk/basic/release/app-basic-x86-release-unsigned-signed.apk breezy-weather-x86-${{ env.VERSION_TAG }}_standard.apk
+          sha256=`sha256sum breezy-weather-x86-${{ env.VERSION_TAG }}_standard.apk | awk '{ print $1 }'`
+          echo "APK_X86_SHA256=$sha256" >> $GITHUB_ENV
+          cp app/build/outputs/apk/basic/release/app-basic-x86_64-release-unsigned-signed.apk breezy-weather-x86_64-${{ env.VERSION_TAG }}_standard.apk
+          sha256=`sha256sum breezy-weather-x86_64-${{ env.VERSION_TAG }}_standard.apk | awk '{ print $1 }'`
+          echo "APK_X86_64_SHA256=$sha256" >> $GITHUB_ENV
+          tar -czvf mapping-${{ env.VERSION_TAG }}_standard.tar.gz --directory=app/build/outputs/mapping/basicRelease/ mapping.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: ${{ env.VERSION_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Breezy Weather ${{ env.VERSION_TAG }}
+          body: |
+            **If you don’t know what to do, download and install `breezy-weather-${{ env.VERSION_TAG }}_standard.apk`, or check [INSTALL instructions](https://github.com/breezy-weather/breezy-weather/blob/main/INSTALL.md) for more details.**
+
+            ---
+
+            ### Checksums
+            | Flavor   | Variant     | SHA-256                                |
+            |----------|-------------|----------------------------------------|
+            | Standard | Universal   | ${{ env.APK_UNIVERSAL_SHA256 }}        |
+            | Standard | arm64-v8a   | ${{ env.APK_ARM64_V8A_SHA256 }}        |
+            | Standard | armeabi-v7a | ${{ env.APK_ARMEABI_V7A_SHA256 }}      |
+            | Standard | x86         | ${{ env.APK_X86_SHA256 }}              |
+            | Standard | x86_64      | ${{ env.APK_X86_64_SHA256 }}           |
+            | Freenet  | Universal   | ${{ env.APK_UNIVERSAL_FREENET_SHA256 }} |
+          files: |
+            breezy-weather-${{ env.VERSION_TAG }}_standard.apk
+            breezy-weather-arm64-v8a-${{ env.VERSION_TAG }}_standard.apk
+            breezy-weather-armeabi-v7a-${{ env.VERSION_TAG }}_standard.apk
+            breezy-weather-x86-${{ env.VERSION_TAG }}_standard.apk
+            breezy-weather-x86_64-${{ env.VERSION_TAG }}_standard.apk
+            mapping-${{ env.VERSION_TAG }}_standard.tar.gz
+            breezy-weather-${{ env.VERSION_TAG }}_freenet.apk
+            mapping-${{ env.VERSION_TAG }}_freenet.tar.gz
+          fail_on_unmatched_files: false
+          draft: false
+          prerelease: false
