@@ -90,6 +90,7 @@ class AqiInService @Inject constructor(
                     lat = location.latitude,
                     lon = location.longitude
                 )
+                    .map { nearestResult -> nearestResult to bearerToken }
                     .onErrorResumeNext { error ->
                         if (error is HttpException && error.code() == 401) {
                             if (isAutoToken) {
@@ -100,7 +101,7 @@ class AqiInService @Inject constructor(
                                             authorization = freshToken,
                                             lat = location.latitude,
                                             lon = location.longitude
-                                        )
+                                        ).map { nearestResult -> nearestResult to freshToken }
                                     }
                             } else {
                                 Observable.error(ApiUnauthorizedException())
@@ -109,9 +110,9 @@ class AqiInService @Inject constructor(
                             Observable.error(error)
                         }
                     }
-                    .flatMap { nearestResult ->
+                    .flatMap { (nearestResult, activeToken) ->
                         resolveStationAirQuality(
-                            bearerToken = bearerToken,
+                            bearerToken = activeToken,
                             stations = nearestResult.data.orEmpty(),
                             stationFilter = filter
                         )
@@ -265,7 +266,7 @@ class AqiInService @Inject constructor(
     }
 
     companion object {
-        private const val AQI_IN_API_BASE_URL = "https://api.aqi.in/"
+        private const val AQI_IN_API_BASE_URL = "https://apiserver.aqi.in/"
         private const val AQI_IN_WEB_URL = "https://www.aqi.in/"
         private const val KEY_CACHED_TOKEN = "cached_token"
         private const val KEY_CACHED_TOKEN_EXP_MS = "cached_token_exp_ms"

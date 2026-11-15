@@ -1,6 +1,7 @@
 name: Breezy Weather push CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -66,7 +67,6 @@ jobs:
         run: ./gradlew clean
 
       - name: Add secrets to local.properties
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           set -e
           echo "breezy.accu.key=$ACCU_WEATHER_KEY" >> local.properties
@@ -113,22 +113,49 @@ jobs:
         run: ./gradlew assembleBasicRelease -Pbreezy # /!\ You’re NOT allowed to redistribute modified APKs with the breezy config enabled, see license terms
 
       - name: Delete local.properties
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           set -e
-          rm local.properties
+          rm -f local.properties
+
+      - name: Prepare signing key
+        run: |
+          if [ -n "$INPUT_SIGNING_KEY" ]; then
+            CLEAN_KEY=$(printf '%s' "$INPUT_SIGNING_KEY" | tr -d '\r\n')
+            echo "EFFECTIVE_SIGNING_KEY=$CLEAN_KEY" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_ALIAS=$INPUT_ALIAS" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_KEY_STORE_PASSWORD=$INPUT_KEY_STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_KEY_PASSWORD=$INPUT_KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -v -keystore temp-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias breezy -storepass breezy -keypass breezy -dname "CN=BreezyWeather"
+            echo "EFFECTIVE_SIGNING_KEY=$(base64 -w 0 temp-release.jks)" >> "$GITHUB_ENV"
+            rm -f temp-release.jks
+            echo "EFFECTIVE_ALIAS=breezy" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_KEY_STORE_PASSWORD=breezy" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_KEY_PASSWORD=breezy" >> "$GITHUB_ENV"
+          fi
+        env:
+          INPUT_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          INPUT_ALIAS: ${{ secrets.ALIAS }}
+          INPUT_KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          INPUT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Sign APK (basic)
-        if: startsWith(github.ref, 'refs/tags/')
         uses: r0adkll/sign-android-release@a391126403df92c6a0a3988a829dd47f79b89ed7
         with:
           releaseDirectory: app/build/outputs/apk/basic/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
+          signingKeyBase64: ${{ env.EFFECTIVE_SIGNING_KEY }}
+          alias: ${{ env.EFFECTIVE_ALIAS }}
+          keyStorePassword: ${{ env.EFFECTIVE_KEY_STORE_PASSWORD }}
+          keyPassword: ${{ env.EFFECTIVE_KEY_PASSWORD }}
         env:
           BUILD_TOOLS_VERSION: '36.0.0'
+
+      - name: Upload signed APKs
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: breezy-weather-basic-release-signed
+          path: app/build/outputs/apk/basic/release/*-signed.apk
 
       - name: Prepare APKs with checksums, archive mapping.txt file (basic)
         if: startsWith(github.ref, 'refs/tags/')
